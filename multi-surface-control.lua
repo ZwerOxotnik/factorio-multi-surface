@@ -101,20 +101,22 @@ local function check_surfaces()
 			local find_entities_filtered = surface.find_entities_filtered
 			local i = 0
 			for chunk in chunk_iterator do
-				i = i + 1
 				filter.area = chunk.area
 				local entites = find_entities_filtered(filter)
 				if #entites > 0 then
+					i = i + 1
 					for j=1, #entites do
 						local entity = entites[j]
 						if entity.valid then
 							entity.active = state
 						end
 					end
-				end
-				if i > CHECK_CHUNKS_COUNT then
-					global.checked_chunks_count = checked_chunks_count - i
-					return
+					if i > CHECK_CHUNKS_COUNT then
+						global.checked_chunks_count = checked_chunks_count - i
+						return
+					end
+				else
+					checked_chunks_count = checked_chunks_count - 1
 				end
 			end
 		end
@@ -127,20 +129,22 @@ local function check_surfaces()
 		local find_entities_filtered = surface.find_entities_filtered
 		local i = 0
 		for chunk in chunk_iterator do
-			i = i + 1
 			filter.area = chunk.area
 			local entites = find_entities_filtered(filter)
 			if #entites > 0 then
+				i = i + 1
 				for j=1, #entites do
 					local entity = entites[j]
 					if entity.valid then
 						entity.active = state
 					end
 				end
-			end
-			if i > CHECK_CHUNKS_COUNT then
-				global.checked_chunks_count = checked_chunks_count + i
-				return
+				if i > CHECK_CHUNKS_COUNT then
+					global.checked_chunks_count = checked_chunks_count + i
+					return
+				end
+			else
+				checked_chunks_count = checked_chunks_count + 1
 			end
 		end
 	end

@@ -123,6 +123,7 @@ local function check_surfaces()
 	else
 		local chunk_iterator = surface.get_chunks()
 		if checked_chunks_count == 0 then
+			game.forces["enemy"].kill_all_units()
 			surface.clear_pollution()
 		end
 		for _=1, checked_chunks_count do
@@ -150,6 +151,8 @@ local function check_surfaces()
 				checked_chunks_count = checked_chunks_count + 1
 			end
 		end
+		game.forces["enemy"].kill_all_units()
+		surface.clear_pollution()
 	end
 	mod_surfaces[surface.index] = state
 	surfaces_queue[surface.index] = nil -- this seems not necessary

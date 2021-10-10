@@ -5,6 +5,7 @@ local module = {}
 
 local DELAY_OF_SURFACE_CHECK = 60 * 60
 local MAX_SURFACES_COUNT = 30
+local CHECK_CHUNKS_COUNT = 15
 
 
 -- Global data
@@ -92,13 +93,15 @@ local function check_surfaces()
 	if surface_data.is_reverse then
 		state = not state
 		if checked_chunks_count > 0 then
-			local chunks = surface.get_chunks()
+			local chunk_iterator = surface.get_chunks()
 			for _=1, checked_chunks_count do
-				chunks() -- weird, but it works
+				chunk_iterator() -- weird, but it works
 			end
 			local filter = {force = "neutral", invert = true}
 			local find_entities_filtered = surface.find_entities_filtered
-			for chunk in chunks do
+			local i = 0
+			for chunk in chunk_iterator do
+				i = i + 1
 				filter.area = chunk.area
 				local entites = find_entities_filtered(filter)
 				if #entites > 0 then
@@ -108,22 +111,23 @@ local function check_surfaces()
 							entity.active = state
 						end
 					end
-					global.checked_chunks_count = checked_chunks_count - 1
-					return
-				else
-					global.checked_chunks_count = checked_chunks_count - 1 -- TODO: IMPROVE!!!
+				end
+				if i > CHECK_CHUNKS_COUNT then
+					global.checked_chunks_count = checked_chunks_count - i
 					return
 				end
 			end
 		end
 	else
-		local chunks = surface.get_chunks()
+		local chunk_iterator = surface.get_chunks()
 		for _=1, checked_chunks_count do
-			chunks() -- weird, but it works
+			chunk_iterator() -- weird, but it works
 		end
 		local filter = {force = "neutral", invert = true}
 		local find_entities_filtered = surface.find_entities_filtered
-		for chunk in chunks do
+		local i = 0
+		for chunk in chunk_iterator do
+			i = i + 1
 			filter.area = chunk.area
 			local entites = find_entities_filtered(filter)
 			if #entites > 0 then
@@ -133,7 +137,9 @@ local function check_surfaces()
 						entity.active = state
 					end
 				end
-				global.checked_chunks_count = checked_chunks_count + 1
+			end
+			if i > CHECK_CHUNKS_COUNT then
+				global.checked_chunks_count = checked_chunks_count + i
 				return
 			end
 		end

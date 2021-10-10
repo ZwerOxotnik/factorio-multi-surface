@@ -122,6 +122,9 @@ local function check_surfaces()
 		end
 	else
 		local chunk_iterator = surface.get_chunks()
+		if checked_chunks_count == 0 then
+			surface.clear_pollution()
+		end
 		for _=1, checked_chunks_count do
 			chunk_iterator() -- weird, but it works
 		end

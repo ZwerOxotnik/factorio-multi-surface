@@ -36,6 +36,9 @@ if check_queue_tick == update_tick then
 		value = check_queue_tick + 1
 	}
 end
+
+---@type boolean
+local delete_unimportant_chunks = settings.global["MS_delete_unimportant_chunks"].value
 --#endregion
 
 
@@ -122,7 +125,9 @@ local function check_surfaces()
 			chunk_iterator() -- weird, but it works
 		end
 		local filter = {force = "neutral", invert = true}
+		local chunk_position = {x = 0, y = 0}
 		local find_entities_filtered = target_surface.find_entities_filtered
+		local delete_chunk = target_surface.delete_chunk
 		local i = 0
 		for chunk in chunk_iterator do
 			filter.area = chunk.area
@@ -140,7 +145,13 @@ local function check_surfaces()
 					return
 				end
 			else
-				checked_chunks_count = checked_chunks_count + 1
+				if delete_unimportant_chunks then
+					chunk_position.x = chunk.x
+					chunk_position.y = chunk.y
+					delete_chunk(chunk_position)
+				else
+					checked_chunks_count = checked_chunks_count + 1
+				end
 			end
 		end
 		game.forces["enemy"].kill_all_units()
@@ -231,6 +242,7 @@ local mod_settings = {
 	["MS_check_chunks_count"] = function(value) check_chunks_count = value end,
 	["MS_max_surfaces_count"] = function(value) max_surfaces_count = value end,
 	["MS_surface_check_delay"] = function(value) surface_check_delay = value end,
+	["MS_delete_unimportant_chunks"] = function(value) delete_unimportant_chunks = value end,
 	["MS_update_tick"] = function(value)
 		if check_queue_tick == value then
 			settings.global["MS_check_queue_tick"] = {

@@ -6,6 +6,15 @@ local module = {}
 --#region Global data
 local surfaces_queue
 local mod_surfaces
+
+---@type LuaSurface
+local target_surface
+
+---@type boolean
+local target_state
+
+---@type boolean
+local is_reverse_target
 --#endregion
 
 
@@ -21,6 +30,14 @@ local check_chunks_count = settings.global["MS_check_chunks_count"].value
 
 ---@type number
 local update_tick = settings.global["MS_update_tick"].value
+
+---@type number
+local check_queue_tick = settings.global["MS_check_queue_tick"].value
+if check_queue_tick == check_queue_tick then
+	settings.global["MS_check_queue_tick"] = {
+		value = check_queue_tick + 1
+	}
+end
 --#endregion
 
 
@@ -39,33 +56,6 @@ local function get_is_someone_on_new_surface(target)
 		end
 	end
 	return false
-end
-
-local function get_target_surface()
-	local target_surface_data = global.target_surface_data
-	if target_surface_data then
-		local surface = game.get_surface(target_surface_data.id)
-		if not (surface and surface.valid) then
-			target_surface_data = nil
-		else
-			return surface, target_surface_data
-		end
-	end
-
-	for surface_index, surface_data in pairs(surfaces_queue) do
-		if surface_data.tick + surface_check_delay > game.tick then break end
-		local surface = game.get_surface(surface_index)
-		surfaces_queue[surface_index] = nil
-		if not (surface and surface.valid) then
-			break
-		else
-			global.target_surface_data = {
-				id = surface_index,
-				active_state = surface_data.active_state
-			}
-			return surface, global.target_surface_data
-		end
-	end
 end
 
 local function destroy_GUIs(player)
@@ -95,19 +85,18 @@ local function create_surfaces_menu_UI(player)
 end
 
 local function check_surfaces()
-	local surface, surface_data = get_target_surface()
-	if surface_data == nil then return end
-	local state = surface_data.active_states
+	if target_state == nil then return end
 	local checked_chunks_count = global.checked_chunks_count
-	if surface_data.is_reverse then
+	local state = target_state
+	if is_reverse_target then
 		state = not state
 		if checked_chunks_count > 0 then
-			local chunk_iterator = surface.get_chunks()
+			local chunk_iterator = target_surface.get_chunks()
 			for _=1, checked_chunks_count do
 				chunk_iterator() -- weird, but it works
 			end
 			local filter = {force = "neutral", invert = true}
-			local find_entities_filtered = surface.find_entities_filtered
+			local find_entities_filtered = target_surface.find_entities_filtered
 			local i = 0
 			for chunk in chunk_iterator do
 				filter.area = chunk.area
@@ -130,16 +119,12 @@ local function check_surfaces()
 			end
 		end
 	else
-		local chunk_iterator = surface.get_chunks()
-		if checked_chunks_count == 0 then
-			game.forces["enemy"].kill_all_units()
-			surface.clear_pollution()
-		end
+		local chunk_iterator = target_surface.get_chunks()
 		for _=1, checked_chunks_count do
 			chunk_iterator() -- weird, but it works
 		end
 		local filter = {force = "neutral", invert = true}
-		local find_entities_filtered = surface.find_entities_filtered
+		local find_entities_filtered = target_surface.find_entities_filtered
 		local i = 0
 		for chunk in chunk_iterator do
 			filter.area = chunk.area
@@ -161,14 +146,39 @@ local function check_surfaces()
 			end
 		end
 		game.forces["enemy"].kill_all_units()
-		surface.clear_pollution()
+		target_surface.clear_pollution()
 	end
-	mod_surfaces[surface.index] = state
-	surfaces_queue[surface.index] = nil -- this seems not necessary
-	global.target_surface_data = nil
+	surfaces_queue[target_surface.index] = nil -- this seems not necessary
 	global.checked_chunks_count = 0
+	global.is_reverse_target = nil
+	global.target_state = nil
+	global.target_surface = nil
+	is_reverse_target = nil
+	target_state = nil
+	target_surface = nil
 end
 
+local function check_queue()
+	if target_surface ~= nil then return end
+
+	for surface_index, surface_data in pairs(surfaces_queue) do
+		if surface_data.tick + surface_check_delay > game.tick then break end
+		local surface = game.get_surface(surface_index)
+		surfaces_queue[surface_index] = nil
+		if not (surface and surface.valid) then
+			break
+		else
+			global.target_surface = surface
+			global.target_state = surface_data.active_state
+			target_surface = global.target_surface
+			target_state = global.target_state
+			if not is_reverse_target then
+				game.forces["enemy"].kill_all_units()
+				target_surface.clear_pollution()
+			end
+		end
+	end
+end
 
 local function delete_UI_command(cmd)
 	if cmd.player_index == 0 then
@@ -224,20 +234,45 @@ local mod_settings = {
 	["MS_max_surfaces_count"] = function(value) max_surfaces_count = value end,
 	["MS_surface_check_delay"] = function(value) surface_check_delay = value end,
 	["MS_update_tick"] = function(value)
-		-- if check_queue_tick == value then
-		-- 	settings.global["MS_update_tick"] = {
-		-- 		value = value + 1
-		-- 	}
-		-- 	return
-		-- end
+		if check_queue_tick == value then
+			settings.global["MS_check_queue_tick"] = {
+				value = value + 1
+			}
+			return
+		end
 		script.on_nth_tick(update_tick, nil)
 		update_tick = value
 		script.on_nth_tick(value, check_surfaces)
+	end,
+	["MS_check_queue_tick"] = function(value)
+		if update_tick == value then
+			settings.global["MS_check_queue_tick"] = {
+				value = value + 1
+			}
+			return
+		end
+		script.on_nth_tick(check_queue_tick, nil)
+		check_queue_tick = value
+		script.on_nth_tick(value, check_queue)
 	end
 }
 local function on_runtime_mod_setting_changed(event)
 	local f = mod_settings[event.setting]
 	if f then f(settings.global[event.setting].value) end
+end
+
+local function on_pre_surface_deleted(event)
+	if target_surface == nil then return end
+	if event.surface_index ~= target_surface.index then return end
+
+	surfaces_queue[target_surface.index] = nil
+	global.checked_chunks_count = 0
+	global.is_reverse_target = nil
+	global.target_surface = nil
+	global.target_state = nil
+	is_reverse_target = nil
+	target_surface = nil
+	target_state = nil
 end
 
 local function on_gui_click(event)
@@ -268,14 +303,15 @@ local function on_gui_click(event)
 	end
 
 
-	if not surface.is_chunk_generated(player.position) then
-		surface.request_to_generate_chunks(player.position, 1)
+	local position = player.position
+	if not surface.is_chunk_generated(position) then
+		surface.request_to_generate_chunks(position, 1)
 	end
-	local new_position = surface.find_non_colliding_position("character", player.position, 15, 1)
+	local new_position = surface.find_non_colliding_position("character", position, 15, 1)
 	if new_position then
 		player.teleport(new_position, surface)
 	else
-		player.print("Please, repeat your action find another place in order to teleport you on another surface")
+		player.print("Please, repeat your action or find another place in order to teleport you on another surface")
 	end
 end
 
@@ -317,13 +353,14 @@ local function on_player_changed_surface(event)
 	local player = game.get_player(event.player_index)
 	if not (player and player.valid) then return end
 	destroy_GUIs(player)
-	local target_data = global.target_surface_data
 
+	local surface = player.surface
 	local player_surface_index = player.surface.index
 	local is_active_surface = mod_surfaces[player_surface_index]
 	if is_active_surface == false then -- Make active the surface
-		if target_data and target_data.id == player_surface_index then
-			target_data.is_reverse = not target_data.active_state
+		if target_surface and target_surface == surface then
+			global.is_reverse_target = not target_state
+			is_reverse_target = not target_state
 			surfaces_queue[player_surface_index] = nil
 		else
 			surfaces_queue[player_surface_index] = {
@@ -332,8 +369,9 @@ local function on_player_changed_surface(event)
 			}
 		end
 	else
-		if target_data and target_data.id == player_surface_index then
-			target_data.is_reverse = not target_data.active_state
+		if target_surface and target_surface == surface then
+			global.is_reverse_target = not target_state
+			is_reverse_target = not target_state
 		end
 	end
 
@@ -344,14 +382,16 @@ local function on_player_changed_surface(event)
 	if is_active_surface == true then -- Make not active the surface
 		if get_is_someone_on_new_surface(player) then
 			-- Someone on surface
-			if target_data and target_data.id == prev_surface_index then
-				target_data.is_reverse = not target_data.active_state
+			if target_surface and target_surface == prev_surface then
+				global.is_reverse_target = not target_state
+				is_reverse_target = not target_state
 				surfaces_queue[prev_surface_index] = nil
 			end
 		else
 			-- Nobody on surface
-			if target_data and target_data.id == prev_surface_index then
-				target_data.is_reverse = target_data.active_state
+			if target_surface and target_surface == prev_surface then
+				global.is_reverse_target = target_state
+				is_reverse_target = not target_state
 				surfaces_queue[prev_surface_index] = nil
 			else
 				surfaces_queue[prev_surface_index] = {
@@ -361,8 +401,9 @@ local function on_player_changed_surface(event)
 			end
 		end
 	else
-		if target_data and target_data.id == prev_surface_index then
-			target_data.is_reverse = target_data.active_state
+		if target_surface and target_surface == prev_surface then
+			global.is_reverse_target = target_state
+			is_reverse_target = not target_state
 		end
 	end
 end
@@ -375,6 +416,8 @@ end
 local function link_data()
 	surfaces_queue = global.surfaces_queue
 	mod_surfaces = global.surfaces
+	target_surface = global.target_surface
+	is_reverse_target = global.is_reverse_target
 end
 
 local function update_global_data()
@@ -408,6 +451,7 @@ end)
 
 module.events = {
 	[defines.events.on_runtime_mod_setting_changed] = on_runtime_mod_setting_changed,
+	[defines.events.on_pre_surface_deleted] = on_pre_surface_deleted,
 	[defines.events.on_gui_click] = on_gui_click,
 	[defines.events.on_player_joined_game] = on_player_joined_game,
 	[defines.events.on_player_left_game] = on_player_left_game,
@@ -416,7 +460,8 @@ module.events = {
 }
 
 module.on_nth_tick = {
-	[update_tick] = check_surfaces
+	[update_tick] = check_surfaces,
+	[check_queue_tick] = check_queue
 }
 
 commands.add_command("add-surface", {"multi-surface-commands.add-surface"}, add_surface_command)

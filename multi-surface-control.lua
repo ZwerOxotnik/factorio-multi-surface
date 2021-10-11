@@ -1,5 +1,3 @@
-
--- WARNING: messy, dirty code below
 local module = {}
 
 

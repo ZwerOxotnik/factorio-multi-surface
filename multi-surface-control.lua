@@ -3,16 +3,25 @@
 local module = {}
 
 
-local DELAY_OF_SURFACE_CHECK = 60 * 60
-local MAX_SURFACES_COUNT = 30
-local CHECK_CHUNKS_COUNT = 15
-
-
--- Global data
--- ###########
+--#region Global data
 local surfaces_queue
 local mod_surfaces
--- ###########
+--#endregion
+
+
+--#region Settings
+---@type number
+local surface_check_delay = settings.global["MS_surface_check_delay"].value
+
+---@type number
+local max_surfaces_count = settings.global["MS_max_surfaces_count"].value
+
+---@type number
+local check_chunks_count = settings.global["MS_check_chunks_count"].value
+
+---@type number
+local update_tick = settings.global["MS_update_tick"].value
+--#endregion
 
 
 local function copy_table(obj)
@@ -44,7 +53,7 @@ local function get_target_surface()
 	end
 
 	for surface_index, surface_data in pairs(surfaces_queue) do
-		if surface_data.tick + DELAY_OF_SURFACE_CHECK > game.tick then break end
+		if surface_data.tick + surface_check_delay > game.tick then break end
 		local surface = game.get_surface(surface_index)
 		surfaces_queue[surface_index] = nil
 		if not (surface and surface.valid) then
@@ -111,7 +120,7 @@ local function check_surfaces()
 							entity.active = state
 						end
 					end
-					if i > CHECK_CHUNKS_COUNT then
+					if i > check_chunks_count then
 						global.checked_chunks_count = checked_chunks_count - i
 						return
 					end
@@ -143,7 +152,7 @@ local function check_surfaces()
 						entity.active = state
 					end
 				end
-				if i > CHECK_CHUNKS_COUNT then
+				if i > check_chunks_count then
 					global.checked_chunks_count = checked_chunks_count + i
 					return
 				end
@@ -195,7 +204,7 @@ local function add_surface_command(cmd)
 		return
 	end
 
-	if #mod_surfaces > MAX_SURFACES_COUNT then
+	if #mod_surfaces > max_surfaces_count then
 		player.print("Max surfaces: 30")
 		return
 	end
@@ -210,6 +219,26 @@ local function add_surface_command(cmd)
 	game.print("Created new surface")
 end
 
+local mod_settings = {
+	["MS_check_chunks_count"] = function(value) check_chunks_count = value end,
+	["MS_max_surfaces_count"] = function(value) max_surfaces_count = value end,
+	["MS_surface_check_delay"] = function(value) surface_check_delay = value end,
+	["MS_update_tick"] = function(value)
+		-- if check_queue_tick == value then
+		-- 	settings.global["MS_update_tick"] = {
+		-- 		value = value + 1
+		-- 	}
+		-- 	return
+		-- end
+		script.on_nth_tick(update_tick, nil)
+		update_tick = value
+		script.on_nth_tick(value, check_surfaces)
+	end
+}
+local function on_runtime_mod_setting_changed(event)
+	local f = mod_settings[event.setting]
+	if f then f(settings.global[event.setting].value) end
+end
 
 local function on_gui_click(event)
 	local element = event.element
@@ -378,6 +407,7 @@ end)
 
 
 module.events = {
+	[defines.events.on_runtime_mod_setting_changed] = on_runtime_mod_setting_changed,
 	[defines.events.on_gui_click] = on_gui_click,
 	[defines.events.on_player_joined_game] = on_player_joined_game,
 	[defines.events.on_player_left_game] = on_player_left_game,
@@ -386,7 +416,7 @@ module.events = {
 }
 
 module.on_nth_tick = {
-	[30] = check_surfaces -- TODO: Change tick
+	[update_tick] = check_surfaces
 }
 
 commands.add_command("add-surface", {"multi-surface-commands.add-surface"}, add_surface_command)

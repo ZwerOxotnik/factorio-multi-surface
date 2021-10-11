@@ -52,9 +52,12 @@ local function copy_table(obj)
 	return res
 end
 
+---@param target LuaPlayer
 local function get_is_someone_on_new_surface(target)
 	local surface = target.surface
-	for _, player in pairs(game.connected_players) do
+	local connected_players = game.connected_players
+	for i = 1, #connected_players do
+		local player = connected_players[i]
 		if player.valid and player ~= target and player.surface == surface then
 			return true
 		end
@@ -88,6 +91,11 @@ local function create_surfaces_menu_UI(player)
 	main_table.add{type = "drop-down", name = "ms_surfaces_list", items = items}
 end
 
+local IGNORE_TYPES = {
+	"transport-belt", "entity-ghost", "pipe", "pipe-to-ground", "straight-rail",
+	"straight-rail", "curved-rail"
+}
+local IGNORE_GHOSTS = {"entity-ghost"}
 local function check_surfaces()
 	if target_state == nil then return end
 
@@ -100,7 +108,7 @@ local function check_surfaces()
 			for _=1, checked_chunks_count do
 				chunk_iterator() -- weird, but it works
 			end
-			local filter = {force = "neutral", invert = true}
+			local filter = {type = IGNORE_TYPES, force = "neutral", invert = true}
 			local find_entities_filtered = target_surface.find_entities_filtered
 			local i = 0
 			for chunk in chunk_iterator do
@@ -128,7 +136,12 @@ local function check_surfaces()
 		for _=1, checked_chunks_count do
 			chunk_iterator() -- weird, but it works
 		end
-		local filter = {force = "neutral", invert = true}
+		local filter
+		if delete_unimportant_chunks then
+			filter = {type = IGNORE_GHOSTS, force = "neutral", invert = true}
+		else
+			filter = {type = IGNORE_TYPES,  force = "neutral", invert = true}
+		end
 		local chunk_position = {x = 0, y = 0}
 		local find_entities_filtered = target_surface.find_entities_filtered
 		local delete_chunk = target_surface.delete_chunk
@@ -176,6 +189,7 @@ end
 local function check_queue()
 	if target_surface ~= nil then return end
 
+	-- This seems wrong
 	for surface_index, surface_data in pairs(surfaces_queue) do
 		if surface_data.tick + surface_check_delay > game.tick then break end
 		local surface = game.get_surface(surface_index)
@@ -372,12 +386,13 @@ local function on_player_changed_surface(event)
 	local player = game.get_player(event.player_index)
 	if not (player and player.valid) then return end
 	destroy_GUIs(player)
+	if target_surface == nil then return end
 
 	local surface = player.surface
 	local player_surface_index = player.surface.index
 	local is_active_surface = mod_surfaces[player_surface_index]
-	if is_active_surface == false then -- Make active the surface
-		if target_surface and target_surface == surface then
+	if target_surface and is_active_surface == false then -- Make active the surface
+		if target_surface == surface then
 			global.is_reverse_target = not target_state
 			is_reverse_target = not target_state
 			surfaces_queue[player_surface_index] = nil
@@ -388,7 +403,7 @@ local function on_player_changed_surface(event)
 			}
 		end
 	else
-		if target_surface and target_surface == surface then
+		if target_surface == surface then
 			global.is_reverse_target = not target_state
 			is_reverse_target = not target_state
 		end
@@ -401,14 +416,14 @@ local function on_player_changed_surface(event)
 	if is_active_surface == true then -- Make not active the surface
 		if get_is_someone_on_new_surface(player) then
 			-- Someone on surface
-			if target_surface and target_surface == prev_surface then
+			if target_surface == prev_surface then
 				global.is_reverse_target = not target_state
 				is_reverse_target = not target_state
 				surfaces_queue[prev_surface_index] = nil
 			end
 		else
 			-- Nobody on surface
-			if target_surface and target_surface == prev_surface then
+			if target_surface == prev_surface then
 				global.is_reverse_target = target_state
 				is_reverse_target = not target_state
 				surfaces_queue[prev_surface_index] = nil
@@ -419,11 +434,9 @@ local function on_player_changed_surface(event)
 				}
 			end
 		end
-	else
-		if target_surface and target_surface == prev_surface then
+	elseif target_surface == prev_surface then
 			global.is_reverse_target = target_state
 			is_reverse_target = not target_state
-		end
 	end
 end
 

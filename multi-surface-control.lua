@@ -27,11 +27,11 @@ local max_surfaces_count = settings.global["MS_max_surfaces_count"].value
 local check_chunks_count = settings.global["MS_check_chunks_count"].value
 
 ---@type number
-local update_tick = settings.global["MS_update_tick"].value
+local chunk_update_tick = settings.global["MS_update_tick"].value
 
 ---@type number
 local check_queue_tick = settings.global["MS_check_queue_tick"].value
-if check_queue_tick == update_tick then
+if check_queue_tick == chunk_update_tick then
 	settings.global["MS_check_queue_tick"] = {
 		value = check_queue_tick + 1
 	}
@@ -39,6 +39,9 @@ end
 
 ---@type boolean
 local delete_unimportant_chunks = settings.global["MS_delete_unimportant_chunks"].value
+
+---@type boolean
+local remove_enemy_units = settings.global["MS_remove_enemy_units"].value
 --#endregion
 
 
@@ -87,6 +90,7 @@ end
 
 local function check_surfaces()
 	if target_state == nil then return end
+
 	local checked_chunks_count = global.checked_chunks_count
 	local state = target_state
 	if is_reverse_target then
@@ -154,7 +158,9 @@ local function check_surfaces()
 				end
 			end
 		end
-		game.forces["enemy"].kill_all_units()
+		if remove_enemy_units then
+			game.forces["enemy"].kill_all_units()
+		end
 		target_surface.clear_pollution()
 	end
 	surfaces_queue[target_surface.index] = nil -- this seems not necessary
@@ -182,7 +188,9 @@ local function check_queue()
 			target_surface = global.target_surface
 			target_state = global.target_state
 			if not is_reverse_target then
-				game.forces["enemy"].kill_all_units()
+				if remove_enemy_units then
+					game.forces["enemy"].kill_all_units()
+				end
 				target_surface.clear_pollution()
 			end
 		end
@@ -243,6 +251,7 @@ local mod_settings = {
 	["MS_max_surfaces_count"] = function(value) max_surfaces_count = value end,
 	["MS_surface_check_delay"] = function(value) surface_check_delay = value end,
 	["MS_delete_unimportant_chunks"] = function(value) delete_unimportant_chunks = value end,
+	["MS_remove_enemy_units"] = function(value) remove_enemy_units = value end,
 	["MS_update_tick"] = function(value)
 		if check_queue_tick == value then
 			settings.global["MS_check_queue_tick"] = {
@@ -250,12 +259,12 @@ local mod_settings = {
 			}
 			return
 		end
-		script.on_nth_tick(update_tick, nil)
-		update_tick = value
+		script.on_nth_tick(chunk_update_tick, nil)
+		chunk_update_tick = value
 		script.on_nth_tick(value, check_surfaces)
 	end,
 	["MS_check_queue_tick"] = function(value)
-		if update_tick == value then
+		if chunk_update_tick == value then
 			settings.global["MS_check_queue_tick"] = {
 				value = value + 1
 			}
@@ -470,7 +479,7 @@ module.events = {
 }
 
 module.on_nth_tick = {
-	[update_tick] = check_surfaces,
+	[chunk_update_tick] = check_surfaces,
 	[check_queue_tick] = check_queue
 }
 

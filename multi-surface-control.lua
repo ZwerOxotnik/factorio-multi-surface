@@ -386,13 +386,12 @@ local function on_player_changed_surface(event)
 	local player = game.get_player(event.player_index)
 	if not (player and player.valid) then return end
 	destroy_GUIs(player)
-	if target_surface == nil then return end
 
 	local surface = player.surface
 	local player_surface_index = player.surface.index
 	local is_active_surface = mod_surfaces[player_surface_index]
-	if target_surface and is_active_surface == false then -- Make active the surface
-		if target_surface == surface then
+	if is_active_surface == false then -- Make active the surface
+		if target_surface and target_surface == surface then
 			global.is_reverse_target = not target_state
 			is_reverse_target = not target_state
 			surfaces_queue[player_surface_index] = nil
@@ -402,11 +401,9 @@ local function on_player_changed_surface(event)
 				active_state = not is_active_surface
 			}
 		end
-	else
-		if target_surface == surface then
-			global.is_reverse_target = not target_state
-			is_reverse_target = not target_state
-		end
+	elseif target_surface and target_surface == surface then
+		global.is_reverse_target = not target_state
+		is_reverse_target = not target_state
 	end
 
 	local prev_surface = game.get_surface(event.surface_index)
@@ -416,14 +413,14 @@ local function on_player_changed_surface(event)
 	if is_active_surface == true then -- Make not active the surface
 		if get_is_someone_on_new_surface(player) then
 			-- Someone on surface
-			if target_surface == prev_surface then
+			if target_surface and target_surface == prev_surface then
 				global.is_reverse_target = not target_state
 				is_reverse_target = not target_state
 				surfaces_queue[prev_surface_index] = nil
 			end
 		else
 			-- Nobody on surface
-			if target_surface == prev_surface then
+			if target_surface and target_surface == prev_surface then
 				global.is_reverse_target = target_state
 				is_reverse_target = not target_state
 				surfaces_queue[prev_surface_index] = nil
@@ -434,9 +431,9 @@ local function on_player_changed_surface(event)
 				}
 			end
 		end
-	elseif target_surface == prev_surface then
-			global.is_reverse_target = target_state
-			is_reverse_target = not target_state
+	elseif target_surface and target_surface == prev_surface then
+		global.is_reverse_target = target_state
+		is_reverse_target = not target_state
 	end
 end
 

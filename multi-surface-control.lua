@@ -31,7 +31,7 @@ local update_tick = settings.global["MS_update_tick"].value
 
 ---@type number
 local check_queue_tick = settings.global["MS_check_queue_tick"].value
-if check_queue_tick == check_queue_tick then
+if check_queue_tick == update_tick then
 	settings.global["MS_check_queue_tick"] = {
 		value = check_queue_tick + 1
 	}
